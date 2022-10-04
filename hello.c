@@ -3,5 +3,5 @@
 
 int main (int argc, char **argv) {
     printf(1, "Hello CS153\n");
-    exit();
+    exit2(100);
 }
