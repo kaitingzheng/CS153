@@ -1,0 +1,163 @@
+commit 85d36c665f16bf450bc28908d6ad1a642525f960
+Author: kaiting zheng <kzhen027@sledge.cs.ucr.edu>
+Date:   Tue Oct 4 14:00:35 2022 -0700
+
+    added exit(int status)
+
+diff --git a/defs.h b/defs.h
+index 82fb982..78109cd 100644
+--- a/defs.h
++++ b/defs.h
+@@ -120,6 +120,7 @@ void            userinit(void);
+ int             wait(void);
+ void            wakeup(void*);
+ void            yield(void);
++void            exit2(int status);
+ 
+ // swtch.S
+ void            swtch(struct context**, struct context*);
+diff --git a/hello.c b/hello.c
+index 876becc..1ae5bc3 100644
+--- a/hello.c
++++ b/hello.c
+@@ -3,5 +3,5 @@
+ 
+ int main (int argc, char **argv) {
+     printf(1, "Hello CS153\n");
+-    exit();
++    exit2(100);
+ }
+\ No newline at end of file
+diff --git a/proc.c b/proc.c
+index 806b1b1..aa9ced0 100644
+--- a/proc.c
++++ b/proc.c
+@@ -267,6 +267,54 @@ exit(void)
+   panic("zombie exit");
+ }
+ 
++// Exit the current process with status.  Does not return.
++// An exited process remains in the zombie state
++// until its parent calls wait() to find out it exited.
++void
++exit2(int status)
++{
++  struct proc *curproc = myproc();
++  struct proc *p;
++  int fd;
++
++  cprintf("current status is: %d\n", status );
++
++  if(curproc == initproc)
++    panic("init exiting");
++
++  // Close all open files.
++  for(fd = 0; fd < NOFILE; fd++){
++    if(curproc->ofile[fd]){
++      fileclose(curproc->ofile[fd]);
++      curproc->ofile[fd] = 0;
++    }
++  }
++
++  begin_op();
++  iput(curproc->cwd);
++  end_op();
++  curproc->cwd = 0;
++
++  acquire(&ptable.lock);
++
++  // Parent might be sleeping in wait().
++  wakeup1(curproc->parent);
++
++  // Pass abandoned children to init.
++  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
++    if(p->parent == curproc){
++      p->parent = initproc;
++      if(p->state == ZOMBIE)
++        wakeup1(initproc);
++    }
++  }
++
++  // Jump into the scheduler, never to return.
++  curproc->state = ZOMBIE;
++  sched();
++  panic("zombie exit");
++}
++
+ // Wait for a child process to exit and return its pid.
+ // Return -1 if this process has no children.
+ int
+diff --git a/syscall.c b/syscall.c
+index ee85261..39db8ac 100644
+--- a/syscall.c
++++ b/syscall.c
+@@ -103,6 +103,7 @@ extern int sys_unlink(void);
+ extern int sys_wait(void);
+ extern int sys_write(void);
+ extern int sys_uptime(void);
++extern int sys_exit2(void);
+ 
+ static int (*syscalls[])(void) = {
+ [SYS_fork]    sys_fork,
+@@ -126,6 +127,7 @@ static int (*syscalls[])(void) = {
+ [SYS_link]    sys_link,
+ [SYS_mkdir]   sys_mkdir,
+ [SYS_close]   sys_close,
++[SYS_exit2]   sys_exit2,
+ };
+ 
+ void
+diff --git a/syscall.h b/syscall.h
+index bc5f356..7d42edc 100644
+--- a/syscall.h
++++ b/syscall.h
+@@ -20,3 +20,4 @@
+ #define SYS_link   19
+ #define SYS_mkdir  20
+ #define SYS_close  21
++#define SYS_exit2  22
+diff --git a/sysproc.c b/sysproc.c
+index 0686d29..f35f311 100644
+--- a/sysproc.c
++++ b/sysproc.c
+@@ -21,6 +21,16 @@ sys_exit(void)
+ }
+ 
+ int
++sys_exit2(void){
++  int status;
++  
++  if(argint(0, &status) < 0) return -1;
++  exit2(status);
++
++  return 0;
++}
++
++int
+ sys_wait(void)
+ {
+   return wait();
+diff --git a/user.h b/user.h
+index 4f99c52..267ae99 100644
+--- a/user.h
++++ b/user.h
+@@ -23,6 +23,7 @@ int getpid(void);
+ char* sbrk(int);
+ int sleep(int);
+ int uptime(void);
++int exit2(int) __attribute__((noreturn));
+ 
+ // ulib.c
+ int stat(const char*, struct stat*);
+diff --git a/usys.S b/usys.S
+index 8bfd8a1..bc8791c 100644
+--- a/usys.S
++++ b/usys.S
+@@ -10,6 +10,7 @@
+ 
+ SYSCALL(fork)
+ SYSCALL(exit)
++SYSCALL(exit2)
+ SYSCALL(wait)
+ SYSCALL(pipe)
+ SYSCALL(read)
