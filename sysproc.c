@@ -37,6 +37,13 @@ sys_wait(void)
 }
 
 int
+sys_wait2(void)
+{
+  int status;
+  return wait2(&status);
+}
+
+int
 sys_kill(void)
 {
   int pid;
