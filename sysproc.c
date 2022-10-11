@@ -39,8 +39,20 @@ sys_wait(void)
 int
 sys_wait2(void)
 {
-  int status;
-  return wait2(&status);
+  int *status;
+  if(argptr(0, (char**)&status, sizeof(status)) < 0) return -1;
+  return wait2(status);
+}
+
+int
+sys_waitpid(void)
+{
+  int *status;
+  if(argptr(1, (char**)&status, sizeof(status)) < 0) return -1;
+  int in_pid, option;
+  if(argint(0, &in_pid) < 0) return -1;
+  if(argint(0, &option) < 0) return -1;
+  return waitpid(in_pid, status, option);
 }
 
 int
