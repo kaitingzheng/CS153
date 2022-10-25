@@ -445,6 +445,11 @@ waitpid(int in_pid, int *status, int option) {
   }
 }
 
+void 
+setpriority(int priority){
+  
+}
+
 
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
