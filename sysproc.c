@@ -51,7 +51,7 @@ sys_waitpid(void)
   if(argptr(1, (char**)&status, sizeof(status)) < 0) return -1;
   int in_pid, option;
   if(argint(0, &in_pid) < 0) return -1;
-  if(argint(0, &option) < 0) return -1;
+  if(argint(2, &option) < 0) return -1;
   return waitpid(in_pid, status, option);
 }
 
