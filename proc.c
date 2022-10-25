@@ -89,6 +89,13 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
+  if (p->parent) {
+    p->prior_val = p->parent->prior_val;
+  }
+  else {
+    p->prior_val = 1;
+  }
+
   release(&ptable.lock);
 
   // Allocate kernel stack.

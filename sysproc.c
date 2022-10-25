@@ -57,7 +57,10 @@ sys_waitpid(void)
 
 int
 sys_setpriority(void){
-  setpriority(0);
+  int priority;
+  
+  if(argint(0, &priority) < 0) return -1;
+  setpriority(priority);
   return 0;
 }
 
