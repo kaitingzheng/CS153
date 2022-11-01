@@ -454,7 +454,8 @@ waitpid(int in_pid, int *status, int option) {
 
 void 
 setpriority(int priority){
-  
+  struct proc *curproc = myproc();
+  curproc->prior_val = priority;
 }
 
 
