@@ -88,13 +88,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-
-  if (p->parent) {
-    p->prior_val = p->parent->prior_val;
-  }
-  else {
-    p->prior_val = 1;
-  }
+  p->prior_val = 10;
 
   release(&ptable.lock);
 
@@ -206,6 +200,7 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  np->prior_val = curproc->prior_val;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -472,6 +467,7 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  struct proc *top_priority_proc;
   c->proc = 0;
   
   for(;;){
@@ -484,14 +480,44 @@ scheduler(void)
       if(p->state != RUNNABLE)
         continue;
 
+      // get highest priority
+      // keep track of highest priority proc
+      struct proc *newP;
+      top_priority_proc = p;
+      for(newP = ptable.proc; newP < &ptable.proc[NPROC]; newP++){
+        if(newP->prior_val < top_priority_proc->prior_val && newP->state == RUNNABLE){
+          top_priority_proc = newP;
+        }
+      }
+
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      // c->proc = p;
+      // switchuvm(p);
+      // p->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
+
+      // swtch(&(c->scheduler), p->context);
+
+      
+      c->proc = top_priority_proc;
+      switchuvm(top_priority_proc);
+      top_priority_proc->state = RUNNING;
+
+
+      swtch(&(c->scheduler), top_priority_proc->context);
+      
+      // aging
+      for(newP = ptable.proc; newP < &ptable.proc[NPROC]; newP++){
+        if(top_priority_proc == newP){
+          newP->prior_val++;
+        }
+        else {
+          newP->prior_val--;
+        }
+      }
+
       switchkvm();
 
       // Process is done running for now.
