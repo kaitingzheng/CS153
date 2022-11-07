@@ -233,6 +233,14 @@ exit(void)
   struct proc *p;
   int fd;
 
+  //fd
+  curproc->exit_status = 0;
+  curproc->T_finish = ticks;
+  int turnaround = curproc->T_finish - curproc->T_start;
+  int waiting = turnaround - curproc->T_burst_total;
+
+  cprintf("Turnaround time: %d CPU ticks\nWaiting time: %d CPU ticks\n", turnaround, waiting);
+
   if(curproc == initproc)
     panic("init exiting");
 
@@ -281,6 +289,11 @@ exit2(int status)
 
   //cprintf("\n --Status is: %d\n", status );
   curproc->exit_status = status;
+  curproc->T_finish = ticks;
+  int turnaround = curproc->T_finish - curproc->T_start;
+  int waiting = turnaround - curproc->T_burst_total;
+
+  cprintf("Turnaround time: %d CPU ticks\nWaiting time: %d CPU ticks\n", turnaround, waiting);
 
   if(curproc == initproc)
     panic("init exiting");
@@ -346,6 +359,8 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->T_burst_finish = ticks;
+        p->T_burst_total += p->T_burst_finish - p->T_burst_start;
         release(&ptable.lock);
         return pid;
       }
@@ -389,6 +404,8 @@ wait2(int *status)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->T_burst_finish = ticks;
+        p->T_burst_total += p->T_burst_finish - p->T_burst_start;
         *status = p->exit_status;
         release(&ptable.lock);
         return pid;
@@ -430,6 +447,8 @@ waitpid(int in_pid, int *status, int option) {
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->T_burst_finish = ticks;
+        p->T_burst_total += p->T_burst_finish - p->T_burst_start;
         *status = p->exit_status;
         release(&ptable.lock);
         return pid;
@@ -504,7 +523,7 @@ scheduler(void)
       c->proc = top_priority_proc;
       switchuvm(top_priority_proc);
       top_priority_proc->state = RUNNING;
-
+      top_priority_proc->T_burst_start = ticks;
 
       swtch(&(c->scheduler), top_priority_proc->context);
       
@@ -561,6 +580,8 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+  myproc()->T_burst_finish = ticks;
+  myproc()->T_burst_total += myproc()->T_burst_finish - myproc()->T_burst_start;
   sched();
   release(&ptable.lock);
 }
@@ -612,6 +633,8 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  p->T_burst_finish = ticks;
+  p->T_burst_total += p->T_burst_finish - p->T_burst_start;
 
   sched();
 
