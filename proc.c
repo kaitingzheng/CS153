@@ -89,6 +89,8 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
   p->prior_val = 10;
+  //p->T_start = ticks;
+  p->T_burst = 0;
 
   release(&ptable.lock);
 
@@ -200,6 +202,7 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  np->T_start = curproc->T_start;
   np->prior_val = curproc->prior_val;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -237,7 +240,8 @@ exit(void)
   curproc->exit_status = 0;
   curproc->T_finish = ticks;
   int turnaround = curproc->T_finish - curproc->T_start;
-  int waiting = turnaround - curproc->T_burst_total;
+  int waiting = turnaround - curproc->T_burst;
+
 
   cprintf("Turnaround time: %d CPU ticks\nWaiting time: %d CPU ticks\n", turnaround, waiting);
 
@@ -288,10 +292,15 @@ exit2(int status)
   int fd;
 
   //cprintf("\n --Status is: %d\n", status );
+
+  //cprintf("\nT_start: %d \n T_finish: %d \n\n", curproc->T_start, curproc->T_finish);
+
+  
+
   curproc->exit_status = status;
   curproc->T_finish = ticks;
   int turnaround = curproc->T_finish - curproc->T_start;
-  int waiting = turnaround - curproc->T_burst_total;
+  int waiting = turnaround - curproc->T_burst;
 
   cprintf("Turnaround time: %d CPU ticks\nWaiting time: %d CPU ticks\n", turnaround, waiting);
 
@@ -359,8 +368,7 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        p->T_burst_finish = ticks;
-        p->T_burst_total += p->T_burst_finish - p->T_burst_start;
+
         release(&ptable.lock);
         return pid;
       }
@@ -404,8 +412,7 @@ wait2(int *status)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        p->T_burst_finish = ticks;
-        p->T_burst_total += p->T_burst_finish - p->T_burst_start;
+        
         *status = p->exit_status;
         release(&ptable.lock);
         return pid;
@@ -447,8 +454,7 @@ waitpid(int in_pid, int *status, int option) {
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        p->T_burst_finish = ticks;
-        p->T_burst_total += p->T_burst_finish - p->T_burst_start;
+      
         *status = p->exit_status;
         release(&ptable.lock);
         return pid;
@@ -469,6 +475,8 @@ waitpid(int in_pid, int *status, int option) {
 void 
 setpriority(int priority){
   struct proc *curproc = myproc();
+  if (priority > 31) priority = 31;
+  if (priority < 0) priority = 0;
   curproc->prior_val = priority;
 }
 
@@ -512,7 +520,7 @@ scheduler(void)
       c->proc = top_priority_proc;
       switchuvm(top_priority_proc);
       top_priority_proc->state = RUNNING;
-      top_priority_proc->T_burst_start = ticks;
+      top_priority_proc->T_burst++;
 
       swtch(&(c->scheduler), top_priority_proc->context);
       
@@ -569,8 +577,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
-  myproc()->T_burst_finish = ticks;
-  myproc()->T_burst_total += myproc()->T_burst_finish - myproc()->T_burst_start;
+  
   sched();
   release(&ptable.lock);
 }
@@ -622,8 +629,6 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  p->T_burst_finish = ticks;
-  p->T_burst_total += p->T_burst_finish - p->T_burst_start;
 
   sched();
 
